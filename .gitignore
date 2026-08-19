@@ -1,0 +1,16 @@
+# Python virtual environment
+venv/
+env/
+ENV/
+
+# Python cache files
+__pycache__/
+*.py[cod]
+
+# Uploaded and converted user images
+static/output/*
+!static/output/.gitkeep
+
+# OS files
+.DS_Store
+Thumbs.db

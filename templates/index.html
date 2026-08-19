@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="/static/style.css">
+    <title>Image Converter</title>
+</head>
+<body>
+    <div class="container">
+        <h1>Image Converter</h1>
+
+        <div class="main-box">
+            <label class="upload-area" for="fileInput">+</label>
+            <input type="file" id="fileInput" accept="image/*">
+            <p id="fileName"></p>
+        
+            <div class="format-buttons">
+               <button class="format-btn" data-format="jpg">JPG</button>
+               <button class="format-btn" data-format="webp">WEBP</button>
+               <button class="format-btn" data-format="png">PNG</button>
+            </div>
+        </div>
+
+        <div class="preview-box" id="previewBox">
+            <h3>Preview of the finished image</h3>
+            <img id="previewImg" alt="Preview">
+
+            <div class="action-buttons">
+                <a id="downloadBtn" class="action-btn download-btn" download>Download</a>
+                <button id="deleteBtn" class="action-btn delete-btn">Delete</button>
+            </div>
+        </div>
+    </div>
+    <script>
+            const fileInput = document.getElementById('fileInput');
+            const fileNameDisplay = document.getElementById('fileName');
+            const formatBtns = document.querySelectorAll('.format-btn');
+            const previewBox = document.getElementById('previewBox');
+            const previewImg = document.getElementById('previewImg');
+            const downloadBtn = document.getElementById('downloadBtn');
+            const deleteBtn = document.getElementById('deleteBtn');
+
+
+            let selectedFile = null;
+            let currentFileName = '';
+
+        fileInput.addEventListener('change', (e) => {
+            selectedFile = e.target.files[0];
+            if (selectedFile) {
+                fileNameDisplay.textContent = selectedFile.name;
+                previewBox.style.display = 'none'; // Hide old preview if new file selected
+            }
+            });
+
+        formatBtns.forEach(btn => {
+            btn.addEventListener('click', async () => {
+                if (!selectedFile) {
+                    alert("Please click the '+' to select an image first!");
+                    return;
+                }
+                
+                const format = btn.getAttribute('data-format');
+                const formData = new FormData();
+                formData.append('file', selectedFile);
+                formData.append('format', format);
+            
+                const originalText = btn.textContent;
+                btn.textContent = '...';
+
+                try {
+                    const response = await fetch('/convert/', {
+                        method: 'POST',
+                        body: formData
+                    });
+    
+                    if (response.ok) {
+                        const data = await response.json();
+                        document.getElementById('previewImg').src = data.preview_url;
+                        document.getElementById('downloadBtn').href = data.preview_url;
+                        document.getElementById('downloadBtn').download = data.filename;
+                        currentFileName = data.filename;
+                        previewBox.style.display = 'block';
+                    } else {
+                        alert("Conversion failed on the server.");
+                    }
+                } catch (error) {
+                    console.error("JavaScript Error:", error);
+                    alert("An error occurred in JavaScript: " + error.message);
+                }finally {
+                    btn.textContent = originalText;
+                }
+            });
+        });
+
+        deleteBtn.addEventListener('click', async () => {
+    if (!currentFileName) return;
+
+    previewImg.src = '';
+
+    try {
+        const response = await fetch(`/delete/${currentFileName}`, {
+            method: 'DELETE'
+        });
+
+        if (response.ok) {
+            previewBox.style.display = 'none';
+            fileInput.value = '';
+            selectedFile = null;
+            fileNameDisplay.textContent = '';
+            currentFileName = '';
+        } else {
+            const errData = await response.json();
+            alert("Failed to delete: " + (errData.error || "Unknown server error"));
+        }
+    } catch (error) {
+        console.error("Delete Error:", error);
+        alert("Delete failed: " + error.message);
+    }
+    });
+
+    </script>
+</body>
+</html>
