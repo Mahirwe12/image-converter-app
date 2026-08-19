@@ -1,7 +1,5 @@
-import os
-import uuid
 import io
-import gc
+import base64
 from pathlib import Path
 from fastapi import FastAPI, Request, File, UploadFile, Form
 from fastapi.responses import HTMLResponse, JSONResponse
@@ -11,11 +9,7 @@ from PIL import Image
 
 app = FastAPI()
 
-
 BASE_DIR = Path(__file__).resolve().parent
-OUTPUT_DIR = BASE_DIR / "static" / "output"
-OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-
 
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
 templates = Jinja2Templates(directory=BASE_DIR / "templates")
@@ -37,31 +31,23 @@ async def convert_image(file: UploadFile = File(...), format: str = Form(...)):
             img = img.convert("RGB")
             target_format = "JPEG"
             ext = "jpg"
-            
-        filename = f"{uuid.uuid4()}.{ext}"
-        filepath = OUTPUT_DIR / filename
-        img.save(filepath, format=target_format)
         
-        return {"preview_url": f"/static/output/{filename}", "filename": filename}
+        # Process image purely in memory (no disk writing)
+        buffer = io.BytesIO()
+        img.save(buffer, format=target_format)
+        buffer.seek(0)
+        
+        # Convert to base64 data URL
+        base64_img = base64.b64encode(buffer.getvalue()).decode('utf-8')
+        mime_type = "jpeg" if ext == "jpg" else ext
+        data_url = f"data:image/{mime_type};base64,{base64_img}"
+        
+        return {"preview_url": data_url, "filename": f"converted.{ext}"}
         
     except Exception as e:
         return JSONResponse(status_code=500, content={"error": str(e)})
 
 @app.delete("/delete/{filename}")
 async def delete_image(filename: str):
-    try:
-        safe_filename = os.path.basename(filename)
-        # Target the exact absolute path
-        filepath = OUTPUT_DIR / safe_filename
-
-        if not filepath.exists():
-            return JSONResponse(status_code=404, content={"error": f"File '{safe_filename}' not found."})
-
-        gc.collect()  # Release file locks
-        os.remove(filepath)
-        return {"message": "Deleted successfully"}
-
-    except PermissionError:
-        return JSONResponse(status_code=500, content={"error": "File is temporarily locked. Try again in a moment."})
-    except Exception as e:
-        return JSONResponse(status_code=500, content={"error": str(e)})
+    # No files on disk to remove; simply acknowledge to let frontend reset UI
+    return {"message": "Deleted successfully"}
